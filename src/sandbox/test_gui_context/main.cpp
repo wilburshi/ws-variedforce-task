@@ -164,7 +164,6 @@ struct App : public ws::App {
   ws::TimePoint session_start_time;
   int behavior_event{}; // 0 - trial starts; 9 - trial ends; 1 - lever 1 is pulled; 2 - lever 2 is pulled; 3 - pump 1 delivery; 4 - pump 2 delivery; etc
 
-
   bool leverpulled[2]{ false, false };
   float leverpulledtime[2]{ 0,0 };  //mostly for the cooperative condition (taskytype = 3)
   float pulledtime_thres{ 1.5f }; // time difference that two animals has to pull the lever 
