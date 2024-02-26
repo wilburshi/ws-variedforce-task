@@ -54,6 +54,8 @@ struct TrialRecord {
   int rewarded;
   int task_type; // indicate the task type and different cue color (maybe beep sounds too): 0 no reward; 1 - self; 2 - altruistic (not built yet); 3 - cooperative (not built yet); 4  - for training (one reward for each animal in the cue on period)
   float pulltime_thres; // the time window threshold for the cooperation pulling
+  float lever1_force;
+  float lever2_force;
   int automated_lever_enabled_index;
 };
 
@@ -67,6 +69,7 @@ struct SessionInfo {
   std::string lever1_animal;
   std::string lever2_animal;
   std::string experiment_date;
+  float max_force;
   float init_force;
   float high_force;
   int task_type;
@@ -77,16 +80,12 @@ struct SessionInfo {
 struct LeverReadout {
   int trial_number;
   double readout_timepoint;
-  //float strain_gauge_lever1;
-  //float strain_gauge_lever2;
-  //float potentiometer_lever1;
-  //float potentiometer_lever2;
   float strain_gauge_lever;
   float potentiometer_lever;
   int lever_id;
   int pull_or_release;
 
-}; // under construction ... -WS
+}; 
 
 
 struct App : public ws::App {
@@ -106,7 +105,7 @@ struct App : public ws::App {
   void shutdown() override {
     ::shutdown(*this);
   }
-  
+
   // Variable initiation
   // Some of these variable can be changed accordingly for each session. - Weikang
 
@@ -124,12 +123,24 @@ struct App : public ws::App {
   // int tasktype{ rand()%4}; // indicate the task type and different cue color: 0 - no reward; 1 - self; 2 - self with effort; 3 - cooperative; 4 - cooperative with effort 
 
   // lever force setting condition
-  bool allow_auto_lever_force_set{true}; // true, if use force as below; false, if manually select force level on the GUI. - WS
-  float maximalforce{ 850.0f }; // 850 // in the unit of gram
-  float normalforce{ 100.0f }; // 130  // in the unit of gram
-  float releaseforce{ 350.0f }; // 350  // in the unit of gram
+  bool allow_auto_lever_force_set{ true }; // true, if use force as below; false, if manually select force level on the GUI. - WS
+  float maximalforce{ 800.0f }; // 850 // in the unit of gram
+  float normalforce{ 100.0f }; // 130  // in the unit of gram (100 grams means 0.2 stimulus size)
+  float releaseforce{ 850.0f }; // 350  // in the unit of gram
   //float normalforce{ 300.0f }; // 130  // in the unit of gram
   //float releaseforce{ 550.0f }; // 350  // in the unit of gram
+
+  // effort level modulation
+  // only function when task types are 2 or 4 
+  float lever1_forceperc{ 0.3f }; // % percentage of max force level (800 grams)
+  float lever2_forceperc{ 0.3f }; // % percentage of max force level (800 grams)
+  //
+  float lever1_forces{ 0.0f };
+  float lever2_forces{ 0.0f };
+  //
+  float stim0_size_witheffort{ 0.0f };
+  float stim1_size_witheffort{ 0.0f };
+
 
   bool allow_automated_juice_delivery{false};
 
@@ -187,18 +198,24 @@ struct App : public ws::App {
   std::optional<ws::audio::BufferHandle> failed_pull_audio_buffer;
 
   // initiate stimuli if using colored squares
-  ws::Vec2f stim0_size{ 0.2f };
+  ws::Vec2f stim0_size{0.2f, 0.2f};
   ws::Vec2f stim0_offset{ -0.4f, 0.25f };
   ws::Vec3f stim0_color{ 1.0f };
   ws::Vec3f stim0_color_noreward{ 0.5f, 0.5f, 0.5f };
   ws::Vec3f stim0_color_cooper{ 1.0f, 1.0f, 0.0f };
   ws::Vec3f stim0_color_disappear{ 0.0f };
-  ws::Vec2f stim1_size{ 0.2f };
+  ws::Vec3f stim0_color_self_witheffort{ 1.0f };
+  ws::Vec3f stim0_color_coop_witheffort{ 1.0f, 1.0f, 0.0f };
+
+  ws::Vec2f stim1_size{ 0.2f, 0.2f };
   ws::Vec2f stim1_offset{ 0.4f, 0.25f };
   ws::Vec3f stim1_color{ 1.0f };
-  ws::Vec3f stim1_color_noreward{ 1.0f, 1.0f, 0.0f };
+  ws::Vec3f stim1_color_noreward{ 0.5f, 0.5f, 0.5f };
   ws::Vec3f stim1_color_cooper{ 1.0f, 1.0f, 0.0f };
   ws::Vec3f stim1_color_disappear{ 0.0f };
+  ws::Vec3f stim1_color_self_witheffort{ 1.0f };
+  ws::Vec3f stim1_color_coop_witheffort{ 1.0f, 1.0f, 0.0f };
+
   // initiate stimuli if using other images (non colored squares)
   std::optional<ws::gfx::TextureHandle> debug_image;
 
@@ -224,6 +241,8 @@ json to_json(const TrialRecord& trial) {
   result["trial_starttime"] = trial.trial_start_time_stamp;
   result["pulltime_thres"] = trial.pulltime_thres;
   result["automated_lever_enabled_index"] = trial.automated_lever_enabled_index;
+  result["lever1_force"] = trial.lever1_force;
+  result["lever2_force"] = trial.lever2_force;
   return result;
 }
 
@@ -303,6 +322,7 @@ json to_json(const SessionInfo& session_info) {
   json result;
   result["lever1_animal"] = session_info.lever1_animal;
   result["lever2_animal"] = session_info.lever2_animal;
+  result["levers_max_force"] = session_info.max_force;
   result["levers_initial_force"] = session_info.init_force;
   result["levers_increased_force"] = session_info.high_force;
   result["experiment_date"] = session_info.experiment_date;
@@ -325,12 +345,6 @@ json to_json(const LeverReadout& lever_reading) {
   json result;
   result["trial_number"] = lever_reading.trial_number;
   result["readout_timepoint"] = lever_reading.readout_timepoint;
-  //result["potentiometer_lever1"] = lever_reading.potentiometer_lever1;
-  //result["potentiometer_lever2"] = lever_reading.potentiometer_lever2;
-  //result["potentiometer_lever1"] = lever_reading.strain_gauge_lever1;
-  //result["potentiometer_lever2"] = lever_reading.strain_gauge_lever2;
-  // result["potentiometer_lever2"] = lever_reading.potentiometer_lever;
-  // result["potentiometer_lever1"] = lever_reading.strain_gauge_lever;
   result["potentiometer"] = lever_reading.potentiometer_lever;
   result["strain_gauge"] = lever_reading.strain_gauge_lever;
   result["lever_id"] = lever_reading.lever_id;
@@ -351,24 +365,11 @@ json to_json(const std::vector<LeverReadout>& lever_reads) {
 void setup(App& app) {
   ws::led::initialize(&app.led_sync, ws::ni::read_time0(), Config::led_channel_index);
   
-  //auto buff_p = std::string{WS_RES_DIR} + "/sounds/piano-c.wav";
-  //app.debug_audio_buffer = ws::audio::read_buffer(buff_p.c_str());
+  // tasktype: 0 - no reward; 1 - self; 2 - self with effort; 3 - cooperative; 4 - cooperative with effort
   if (app.tasktype == 0) {
     auto buff_p = std::string{ WS_RES_DIR } + "/sounds/start_trial_beep.wav";
     app.start_trial_audio_buffer = ws::audio::read_buffer(buff_p.c_str());
     auto debug_image_p = std::string{ WS_RES_DIR } + "/images/calla_leaves.png";
-    app.debug_image = ws::gfx::read_2d_image(debug_image_p.c_str());
-  }
-  else if (app.tasktype == 1 || app.tasktype == 4) {
-    auto buff_p = std::string{ WS_RES_DIR } + "/sounds/start_trial_beep.wav";
-    app.start_trial_audio_buffer = ws::audio::read_buffer(buff_p.c_str());
-    // auto debug_image_p = std::string{ WS_RES_DIR } + "/images/calla_leaves.png";
-    // app.debug_image = ws::gfx::read_2d_image(debug_image_p.c_str());
-  }
-  else if (app.tasktype == 2) {
-    auto buff_p = std::string{ WS_RES_DIR } + "/sounds/start_trial_beep.wav";
-    app.start_trial_audio_buffer = ws::audio::read_buffer(buff_p.c_str());
-    auto debug_image_p = std::string{ WS_RES_DIR } + "/images/blue_triangle.png";
     app.debug_image = ws::gfx::read_2d_image(debug_image_p.c_str());
   }
   else if (app.tasktype == 3) {
@@ -376,6 +377,10 @@ void setup(App& app) {
     app.start_trial_audio_buffer = ws::audio::read_buffer(buff_p.c_str());
     auto debug_image_p = std::string{ WS_RES_DIR } + "/images/yellow_circle.png";
     app.debug_image = ws::gfx::read_2d_image(debug_image_p.c_str());
+  }
+  else {
+    auto buff_p = std::string{ WS_RES_DIR } + "/sounds/start_trial_beep.wav";
+    app.start_trial_audio_buffer = ws::audio::read_buffer(buff_p.c_str());
   }
   auto buff_p1 = std::string{ WS_RES_DIR } + "/sounds/successful_beep.wav";
   app.sucessful_pull_audio_buffer = ws::audio::read_buffer(buff_p1.c_str());
@@ -425,6 +430,7 @@ void shutdown(App& app) {
     SessionInfo session_info{};
     session_info.lever1_animal = app.lever1_animal;
     session_info.lever2_animal = app.lever2_animal;
+    session_info.max_force = app.maximalforce;
     session_info.high_force = app.releaseforce;
     session_info.init_force = app.normalforce;
     session_info.experiment_date = app.experiment_date;
@@ -723,8 +729,8 @@ void task_update(App& app) {
     
     // only use for trial-by-trial setting
     // app.tasktype = 1;
-    // app.tasktype = rand()%2; // indicate the task type and different cue color (maybe beep sounds too): 0 no reward; 1 - self; 2 - altruistic (not built yet); 3 - cooperative (not built yet); 4  - for training (one reward for each animal in the cue on period)
-    // app.tasktype = rand()%4; // indicate the task type and different cue color (maybe beep sounds too): 0 no reward; 1 - self; 2 - altruistic (not built yet); 3 - cooperative (not built yet); 4  - for training (one reward for each animal in the cue on period)
+    // app.tasktype = rand()%2; // indicate the task type and different cue color (maybe beep sounds too): tasktype: 0 - no reward; 1 - self; 2 - self with effort; 3 - cooperative; 4 - cooperative with effort
+    // app.tasktype = rand()%4; // indicate the task type and different cue color (maybe beep sounds too): tasktype: 0 - no reward; 1 - self; 2 - self with effort; 3 - cooperative; 4 - cooperative with effort
     //
     app.rewarded[0] = 0;
     app.rewarded[1] = 0;
@@ -733,12 +739,27 @@ void task_update(App& app) {
     app.leverpulledtime[0] = 0;
     app.leverpulledtime[1] = 0;
 
+    // manipulate the force level
+    if (app.tasktype == 2 || app.tasktype == 4) {
+      app.lever1_forces = app.lever1_forceperc * app.maximalforce;
+      app.lever2_forces = app.lever2_forceperc * app.maximalforce;
+      //app.stim0_size[0] = app.lever1_forceperc * 0.2 / (app.normalforce / app.maximalforce); // 0.125:  100 normal grams to 800 max grams
+      //app.stim1_size[0] = app.lever2_forceperc * 0.2 / (app.normalforce / app.maximalforce); // 0.125:  100 normal grams to 800 max grams
+      app.stim0_size_witheffort = app.lever1_forceperc * 0.2 / (app.normalforce / app.maximalforce); // 0.125:  100 normal grams to 800 max grams
+      app.stim0_size = {0.2f, app.stim0_size_witheffort};
+      app.stim1_size_witheffort = app.lever2_forceperc * 0.2 / (app.normalforce / app.maximalforce); // 0.125:  100 normal grams to 800 max grams
+      app.stim1_size = {0.2f, app.stim1_size_witheffort};
+    }
+    else {
+      app.lever1_forces = app.normalforce;
+      app.lever2_forces = app.normalforce;
+    }
+
     // sound to indicate the start of a session
     if (app.trialnumber == 0 && start_session_sound) {
       ws::audio::play_buffer_both(app.start_trial_audio_buffer.value(), 0.5f);
       app.session_start_time = now();
       start_session_sound = false;
-
     }
 
     // end session when trialnumber or total sesison time reach the threshold
@@ -748,8 +769,14 @@ void task_update(App& app) {
 
     // push the lever force back to normal
     if (app.allow_auto_lever_force_set) {
-      ws::lever::set_force(ws::lever::get_global_lever_system(), app.levers[0], app.normalforce);
-      ws::lever::set_force(ws::lever::get_global_lever_system(), app.levers[1], app.normalforce);
+      if (app.tasktype == 2 || app.tasktype == 4) {
+        ws::lever::set_force(ws::lever::get_global_lever_system(), app.levers[0], app.lever1_forces);
+        ws::lever::set_force(ws::lever::get_global_lever_system(), app.levers[1], app.lever2_forces);
+      }
+      else {
+        ws::lever::set_force(ws::lever::get_global_lever_system(), app.levers[0], app.normalforce);
+        ws::lever::set_force(ws::lever::get_global_lever_system(), app.levers[1], app.normalforce);
+      }
     }
   }
 
@@ -767,7 +794,7 @@ void task_update(App& app) {
       // if (pull_res.pulled_lever && app.sucessful_pull_audio_buffer && state == 0) { // only pull during the trial, not the ITI (state == 1)  -WS
       if (pull_res.pulled_lever && app.sucessful_pull_audio_buffer) {
 
-        if (app.tasktype != 3) {
+        if (app.tasktype != 3 && app.tasktype != 4) {
           ws::audio::play_buffer_on_channel(app.sucessful_pull_audio_buffer.value(), abs(i-1), 0.5f);
         }
 
@@ -786,19 +813,6 @@ void task_update(App& app) {
           time_stamps.time_points = app.timepoint;
           time_stamps.behavior_events = app.behavior_event;
           app.behavior_data.push_back(time_stamps);
-
-          // update session info
-          // save some task information into session_info
-          SessionInfo session_info{};
-          session_info.lever1_animal = app.lever1_animal;
-          session_info.lever2_animal = app.lever2_animal;
-          session_info.high_force = app.releaseforce;
-          session_info.init_force = app.normalforce;
-          session_info.experiment_date = app.experiment_date;
-          session_info.task_type = app.tasktype;
-          session_info.pulltime_thres = app.pulledtime_thres;
-          session_info.first_pull_time = app.trial_start_time_forsave;
-          app.session_info.push_back(session_info);
         }
 
         // save some behavioral events data
@@ -815,10 +829,6 @@ void task_update(App& app) {
         LeverReadout lever_read{};
         lever_read.trial_number = app.trialnumber;
         lever_read.readout_timepoint = app.timepoint;
-        //lever_read.potentiometer_lever1 = lever_state.value().potentiometer_reading;
-        //lever_read.strain_gauge_lever1 = lever_state.value().strain_gauge;
-        //lever_read.potentiometer_lever2 = lever_state.value().potentiometer_reading;
-        //lever_read.strain_gauge_lever2 = lever_state.value().strain_gauge;
         lever_read.strain_gauge_lever = lever_state.value().strain_gauge;
         lever_read.potentiometer_lever = lever_state.value().potentiometer_reading;
         lever_read.lever_id = i + 1;
@@ -835,7 +845,7 @@ void task_update(App& app) {
 
         // deliver juice accordingly
         // self condition
-        if (app.tasktype == 1 || app.tasktype == 4) {
+        if (app.tasktype == 1 || app.tasktype == 2) {
           auto pump_handle = ws::pump::ith_pump(abs(i)); // pump id: 0 - pump 1; 1 - pump 2  -WS
           std::this_thread::sleep_for(std::chrono::milliseconds(app.juice_delay_time));
           ws::pump::run_dispense_program(pump_handle);
@@ -851,30 +861,13 @@ void task_update(App& app) {
           app.behavior_data.push_back(time_stamps3);
         }
 
-        // altruistic condition
-        else if (app.tasktype == 2) {
-          auto pump_handle = ws::pump::ith_pump(abs(i-1)); // pump id: 0 - pump 1; 1 - pump 2  -WS
-          std::this_thread::sleep_for(std::chrono::milliseconds(app.juice_delay_time));
-          ws::pump::run_dispense_program(pump_handle);
-          app.getreward[abs(i - 1)] = true;
-          app.rewarded[abs(i - 1)] = 1;
-          //
-          app.timepoint = elapsed_time(app.trialstart_time, now());
-          app.behavior_event = abs(i-1) + 3; // pump 1 or 2 deliver  
-          BehaviorData time_stamps3{};
-          time_stamps3.trial_number = app.trialnumber;
-          time_stamps3.time_points = app.timepoint;
-          time_stamps3.behavior_events = app.behavior_event;
-          app.behavior_data.push_back(time_stamps3);
-        }
-
         // mutual cooperative condition (see below)
         // examine the other animal to determine how the trial ends 
         if (lever_read.lever_id == abs(app.first_pull_id - 2) + 1) {
           if (app.other_pull_time < app.pulledtime_thres) {
 
             // cooperative condition
-            if (app.tasktype == 3) {
+            if (app.tasktype == 3 || app.tasktype == 4) {
               if (app.leverpulled[0] && app.leverpulled[1]) {
 
                 ws::audio::play_buffer_both(app.sucessful_pull_audio_buffer.value(), 0.5f);
@@ -942,6 +935,8 @@ void task_update(App& app) {
             trial_record.automated_lever_enabled_index = get_automated_lever_enabled_index(app);
             trial_record.pulltime_thres = app.pulledtime_thres;
             trial_record.trial_start_time_stamp = app.trial_start_time_forsave;
+            trial_record.lever1_force = app.lever1_forces;
+            trial_record.lever2_force = app.lever2_forces;
             //  Add to the array of trials.
             app.trial_records.push_back(trial_record);
             // 
@@ -974,6 +969,7 @@ void task_update(App& app) {
             SessionInfo session_info{};
             session_info.lever1_animal = app.lever1_animal;
             session_info.lever2_animal = app.lever2_animal;
+            session_info.max_force = app.maximalforce;
             session_info.high_force = app.releaseforce;
             session_info.init_force = app.normalforce;
             session_info.experiment_date = app.experiment_date;
@@ -1016,7 +1012,18 @@ void task_update(App& app) {
 
 
       else if (pull_res.released_lever && app.allow_auto_lever_force_set) {
-        ws::lever::set_force(ws::lever::get_global_lever_system(), lh, app.normalforce);
+
+        if (app.tasktype == 2 || app.tasktype == 4) {
+          if (i == 0) {
+            ws::lever::set_force(ws::lever::get_global_lever_system(), lh, app.lever1_forces);
+          }
+          else if (i == 1) {
+            ws::lever::set_force(ws::lever::get_global_lever_system(), lh, app.lever2_forces);
+          }
+        }
+        else {
+          ws::lever::set_force(ws::lever::get_global_lever_system(), lh, app.normalforce);
+        }
 
         // ws::audio::play_buffer_both(app.failed_pull_audio_buffer.value(), 0.5f);
           
@@ -1024,10 +1031,6 @@ void task_update(App& app) {
         LeverReadout lever_read{};
         lever_read.trial_number = app.trialnumber;
         lever_read.readout_timepoint = elapsed_time(app.trialstart_time, now());;
-        //lever_read.potentiometer_lever1 = lever_state.value().potentiometer_reading;
-        //lever_read.strain_gauge_lever1 = lever_state.value().strain_gauge;
-        //lever_read.potentiometer_lever2 = lever_state.value().potentiometer_reading;
-        //lever_read.strain_gauge_lever2 = lever_state.value().strain_gauge;
         lever_read.strain_gauge_lever = lever_state.value().strain_gauge;
         lever_read.potentiometer_lever = lever_state.value().potentiometer_reading;
         lever_read.lever_id = i + 1;
@@ -1044,15 +1047,16 @@ void task_update(App& app) {
       // new_trial.play_sound_on_entry = app.start_trial_audio_buffer;
       new_trial.total_time = app.new_total_time;
       new_trial.stim0_offset = app.stim0_offset;
-      new_trial.stim0_size = app.stim0_size;
       new_trial.stim1_offset = app.stim1_offset;
+      new_trial.stim0_size = app.stim0_size;
       new_trial.stim1_size = app.stim1_size;
+      // tasktype: 0 - no reward; 1 - self; 2 - self with effort; 3 - cooperative; 4 - cooperative with effort
       if (app.tasktype == 0) {
         //auto buff_p = std::string{ WS_RES_DIR } + "/sounds/start_trial_beep.wav";
         //app.start_trial_audio_buffer = ws::audio::read_buffer(buff_p.c_str());
         // auto debug_image_p = std::string{ WS_RES_DIR } + "/images/calla_leaves.png";
         // app.debug_image = ws::gfx::read_2d_image(debug_image_p.c_str());
-        //
+        //      
         new_trial.stim0_image = std::nullopt;
         new_trial.stim1_image = std::nullopt;
         new_trial.stim0_color = app.stim0_color_noreward;
@@ -1070,17 +1074,17 @@ void task_update(App& app) {
       else if (app.tasktype == 2) {
         //auto buff_p = std::string{ WS_RES_DIR } + "/sounds/start_trial_beep.wav";
         //app.start_trial_audio_buffer = ws::audio::read_buffer(buff_p.c_str());
-        //auto debug_image_p = std::string{ WS_RES_DIR } + "/images/blue_triangle.png";
-       // app.debug_image = ws::gfx::read_2d_image(debug_image_p.c_str());
         //
-        new_trial.stim0_image = app.debug_image;
-        new_trial.stim1_image = app.debug_image;
+        new_trial.stim0_image = std::nullopt;
+        new_trial.stim1_image = std::nullopt;
+        new_trial.stim0_color = app.stim0_color_self_witheffort;
+        new_trial.stim1_color = app.stim1_color_self_witheffort;
       }
       else if (app.tasktype == 3) {
         //auto buff_p = std::string{ WS_RES_DIR } + "/sounds/start_trial_beep.wav";
         //app.start_trial_audio_buffer = ws::audio::read_buffer(buff_p.c_str());
-        //auto debug_image_p = std::string{ WS_RES_DIR } + "/images/yellow_circle.png";
-        //app.debug_image = ws::gfx::read_2d_image(debug_image_p.c_str());
+        auto debug_image_p = std::string{ WS_RES_DIR } + "/images/yellow_circle.png";
+        app.debug_image = ws::gfx::read_2d_image(debug_image_p.c_str());
         //
         new_trial.stim0_image = app.debug_image;
         new_trial.stim1_image = app.debug_image;
@@ -1091,18 +1095,8 @@ void task_update(App& app) {
         //
         new_trial.stim0_image = std::nullopt;
         new_trial.stim1_image = std::nullopt;
-        new_trial.stim0_color = app.stim0_color;
-        new_trial.stim1_color = app.stim1_color;
-        // if (app.leverpulled[0]) { new_trial.stim0_color = app.stim0_color_disappear; }
-        // if (app.leverpulled[1]) { new_trial.stim1_color = app.stim1_color_disappear; }
-        if (0) {
-          //  Optionally specify an image handle - when this is set, the stim0_color parameter
-          //  is ignored and the image is presented instead.
-          // if (!app.leverpulled[0]) { new_trial.stim0_image = app.debug_image; }
-          // else if (app.leverpulled[0]) { new_trial.stim0_image = {}; new_trial.stim0_color = app.stim0_color_disappear; }
-          // if (!app.leverpulled[1]) { new_trial.stim1_image = app.debug_image; } //  works analogously for the other image. 
-          // else if (app.leverpulled[1]) { new_trial.stim1_image = {}; new_trial.stim1_color = app.stim1_color_disappear; }  
-        }
+        new_trial.stim0_color = app.stim0_color_coop_witheffort;
+        new_trial.stim1_color = app.stim1_color_coop_witheffort;
       }
 
 
@@ -1146,6 +1140,8 @@ void task_update(App& app) {
       trial_record.automated_lever_enabled_index = get_automated_lever_enabled_index(app);
       trial_record.trial_start_time_stamp = app.trial_start_time_forsave;
       trial_record.pulltime_thres = app.pulledtime_thres;
+      trial_record.lever1_force = app.lever1_forces;
+      trial_record.lever2_force = app.lever2_forces;
       //  Add to the array of trials.
       app.trial_records.push_back(trial_record);
       state = 0;
@@ -1169,6 +1165,8 @@ void ensure_some_trial_records_are_stored(App& app) {
     trial_record.automated_lever_enabled_index = get_automated_lever_enabled_index(app);
     trial_record.trial_start_time_stamp = app.trial_start_time_forsave;
     trial_record.pulltime_thres = app.pulledtime_thres;
+    trial_record.lever1_force = app.lever1_forces;
+    trial_record.lever2_force = app.lever2_forces;
     //  Add to the array of trials.
     app.trial_records.push_back(trial_record);
   }
