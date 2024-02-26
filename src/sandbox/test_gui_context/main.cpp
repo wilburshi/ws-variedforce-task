@@ -111,28 +111,29 @@ struct App : public ws::App {
   // Some of these variable can be changed accordingly for each session. - Weikang
 
   // file name
-  std::string lever1_animal{ "Vermelho" };
-  std::string lever2_animal{ "Koala" };
+  std::string lever1_animal{ "Koala" };
+  std::string lever2_animal{ "Vermelho" };
 
 
-  std::string experiment_date{ "20240118" };
+  std::string experiment_date{ "20240226" };
 
+  // tasktype: 0 - no reward; 1 - self; 2 - self with effort; 3 - cooperative; 4 - cooperative with effort
+  int tasktype{ 3 }; // indicate the task type and different cue color: 
 
-  int tasktype{ 3 }; // indicate the task type and different cue color: 0 no reward; 1 - self; 2 - altruistic; 3 - cooperative; 4  - for training
-
-  // int tasktype{rand()%2}; // indicate the task type and different cue color: 0 no reward; 1 - self; 2 - altruistic; 3 - cooperative; 4  - for training 
-  // int tasktype{ rand()%4}; // indicate the task type and different cue color: 0 no reward; 1 - self; 2 - altruistic; 3 - cooperative; 4  - for training 
+  // int tasktype{rand()%2}; // indicate the task type and different cue color: 0 - no reward; 1 - self; 2 - self with effort; 3 - cooperative; 4 - cooperative with effort
+  // int tasktype{ rand()%4}; // indicate the task type and different cue color: 0 - no reward; 1 - self; 2 - self with effort; 3 - cooperative; 4 - cooperative with effort 
 
   // lever force setting condition
   bool allow_auto_lever_force_set{true}; // true, if use force as below; false, if manually select force level on the GUI. - WS
-  float normalforce{ 100.0f }; // 130
-  float releaseforce{ 350.0f }; // 350
-  //float normalforce{ 300.0f }; // 130
-  //float releaseforce{ 550.0f }; // 350
+  float maximalforce{ 850.0f }; // 850 // in the unit of gram
+  float normalforce{ 100.0f }; // 130  // in the unit of gram
+  float releaseforce{ 350.0f }; // 350  // in the unit of gram
+  //float normalforce{ 300.0f }; // 130  // in the unit of gram
+  //float releaseforce{ 550.0f }; // 350  // in the unit of gram
 
   bool allow_automated_juice_delivery{false};
 
-  int lever_force_limits[2]{-550, 550};
+  int lever_force_limits[2]{-950, 950};
   ws::lever::PullDetect detect_pull[2]{};
   // float lever_position_limits[2]{25e3f, 33e3f};
   // float lever_position_limits[4]{ 64.5e3f, 65e3f, 14e2f, 55e2f}; // lever 1 and lever 2 have different potentiometer ranges - WS 
@@ -166,7 +167,7 @@ struct App : public ws::App {
 
   bool leverpulled[2]{ false, false };
   float leverpulledtime[2]{ 0,0 };  //mostly for the cooperative condition (taskytype = 3)
-  float pulledtime_thres{ 1.5f }; // time difference that two animals has to pull the lever 
+  float pulledtime_thres{ 1.0f }; // time difference that two animals has to pull the lever 
 
   bool automated_pulls_enabled[2]{};
   ws::lever::AutomatedPull automated_pulls[2]{};
