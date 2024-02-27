@@ -1,4 +1,6 @@
-This repository contains the source code for the cooperative lever-pulling task.
+This repository contains the source code for the effort based pulling task.
+
+Author: Nicholas Fagan, Weikang Shi
 
 ### build + run
 
