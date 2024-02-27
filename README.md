@@ -1,5 +1,7 @@
 This repository contains the source code for the effort based pulling task.
 
+Author: Nicholas Fagan, Weikang Shi
+
 ### build + run
 
 1. Clone the repository: `git clone --recursive https://github.com/wilburshi/ws-variedforce-task`. Note the `--recursive` flag.
