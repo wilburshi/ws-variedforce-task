@@ -110,11 +110,11 @@ struct App : public ws::App {
   // Some of these variable can be changed accordingly for each session. - Weikang
 
   // file name
-  std::string lever1_animal{ "Koala" };
-  std::string lever2_animal{ "Vermelho" };
+  std::string lever1_animal{ "Vermelho" };
+  std::string lever2_animal{ "Koala" };
 
 
-  std::string experiment_date{ "20240226" };
+  std::string experiment_date{ "20240227" };
 
   // tasktype: 0 - no reward; 1 - self; 2 - self with effort; 3 - cooperative; 4 - cooperative with effort
   int tasktype{ 3 }; // indicate the task type and different cue color: 
@@ -126,7 +126,7 @@ struct App : public ws::App {
   bool allow_auto_lever_force_set{ true }; // true, if use force as below; false, if manually select force level on the GUI. - WS
   float maximalforce{ 800.0f }; // 850 // in the unit of gram
   float normalforce{ 100.0f }; // 130  // in the unit of gram (100 grams means 0.2 stimulus size)
-  float releaseforce{ 850.0f }; // 350  // in the unit of gram
+  float releaseforce{ 350.0f }; // 350  // in the unit of gram
   //float normalforce{ 300.0f }; // 130  // in the unit of gram
   //float releaseforce{ 550.0f }; // 350  // in the unit of gram
 
@@ -198,8 +198,8 @@ struct App : public ws::App {
   std::optional<ws::audio::BufferHandle> failed_pull_audio_buffer;
 
   // initiate stimuli if using colored squares
-  ws::Vec2f stim0_size{0.2f, 0.2f};
-  ws::Vec2f stim0_offset{ -0.4f, 0.25f };
+  ws::Vec2f stim0_size{0.1f, 0.1f}; // {0.2f,0.2f}
+  ws::Vec2f stim0_offset{ -0.4f, 0.1f }; //{ -0.4f, 0.25f };
   ws::Vec3f stim0_color{ 1.0f };
   ws::Vec3f stim0_color_noreward{ 0.5f, 0.5f, 0.5f };
   ws::Vec3f stim0_color_cooper{ 1.0f, 1.0f, 0.0f };
@@ -207,8 +207,8 @@ struct App : public ws::App {
   ws::Vec3f stim0_color_self_witheffort{ 1.0f };
   ws::Vec3f stim0_color_coop_witheffort{ 1.0f, 1.0f, 0.0f };
 
-  ws::Vec2f stim1_size{ 0.2f, 0.2f };
-  ws::Vec2f stim1_offset{ 0.4f, 0.25f };
+  ws::Vec2f stim1_size{ 0.1f, 0.1f }; // {0.2f,0.2f}
+  ws::Vec2f stim1_offset{ 0.4f, 0.1f }; //{ -0.4f, 0.25f };
   ws::Vec3f stim1_color{ 1.0f };
   ws::Vec3f stim1_color_noreward{ 0.5f, 0.5f, 0.5f };
   ws::Vec3f stim1_color_cooper{ 1.0f, 1.0f, 0.0f };
@@ -535,7 +535,6 @@ void render_gui(App& app) {
   ImGui::SameLine();
   ImGui::Checkbox("EnableAutomatedLever1", &app.automated_pulls_enabled[1]);
 
-
   //if (auto m1_name = render_text_input_field("Lever1Animal")) {
   //  app.lever1_animal = m1_name.value();
   //}
@@ -551,6 +550,18 @@ void render_gui(App& app) {
   float pulledtime_thres_gui[1]{ app.pulledtime_thres };
   if (ImGui::InputFloat("cooperation threshold (second)", pulledtime_thres_gui, 0.0f, 0.0f, "%0.1f", enter_flag)) {
     app.pulledtime_thres = pulledtime_thres_gui[0];
+  };
+  
+  if (1) {
+    float lever1_forceperc_gui[1]{ app.lever1_forceperc };
+    if (ImGui::InputFloat("lever1 force percantage", lever1_forceperc_gui, 0.0f, 0.0f, "%0.1f", enter_flag)) {
+      app.lever1_forceperc = lever1_forceperc_gui[0];
+    };
+
+    float lever2_forceperc_gui[1]{ app.lever2_forceperc };
+    if (ImGui::InputFloat("lever2 force percantage", lever2_forceperc_gui, 0.0f, 0.0f, "%0.1f", enter_flag)) {
+      app.lever2_forceperc = lever2_forceperc_gui[0];
+    };
   };
 
   render_lever_gui(app);
@@ -743,12 +754,12 @@ void task_update(App& app) {
     if (app.tasktype == 2 || app.tasktype == 4) {
       app.lever1_forces = app.lever1_forceperc * app.maximalforce;
       app.lever2_forces = app.lever2_forceperc * app.maximalforce;
-      //app.stim0_size[0] = app.lever1_forceperc * 0.2 / (app.normalforce / app.maximalforce); // 0.125:  100 normal grams to 800 max grams
-      //app.stim1_size[0] = app.lever2_forceperc * 0.2 / (app.normalforce / app.maximalforce); // 0.125:  100 normal grams to 800 max grams
-      app.stim0_size_witheffort = app.lever1_forceperc * 0.2 / (app.normalforce / app.maximalforce); // 0.125:  100 normal grams to 800 max grams
-      app.stim0_size = {0.2f, app.stim0_size_witheffort};
-      app.stim1_size_witheffort = app.lever2_forceperc * 0.2 / (app.normalforce / app.maximalforce); // 0.125:  100 normal grams to 800 max grams
-      app.stim1_size = {0.2f, app.stim1_size_witheffort};
+      //app.stim0_size[0] = app.lever1_forceperc * 0.1 / (app.normalforce / app.maximalforce); // 0.125:  100 normal grams to 800 max grams
+      //app.stim1_size[0] = app.lever2_forceperc * 0.1 / (app.normalforce / app.maximalforce); // 0.125:  100 normal grams to 800 max grams
+      app.stim0_size_witheffort = app.lever1_forceperc * 0.1 / (app.normalforce / app.maximalforce); // 0.125:  100 normal grams to 800 max grams
+      app.stim0_size = {0.1f, app.stim0_size_witheffort};
+      app.stim1_size_witheffort = app.lever2_forceperc * 0.1 / (app.normalforce / app.maximalforce); // 0.125:  100 normal grams to 800 max grams
+      app.stim1_size = {0.1f, app.stim1_size_witheffort};
     }
     else {
       app.lever1_forces = app.normalforce;
