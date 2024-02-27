@@ -126,7 +126,7 @@ struct App : public ws::App {
   bool allow_auto_lever_force_set{ true }; // true, if use force as below; false, if manually select force level on the GUI. - WS
   float maximalforce{ 800.0f }; // 850 // in the unit of gram
   float normalforce{ 100.0f }; // 130  // in the unit of gram (100 grams means 0.2 stimulus size)
-  float releaseforce{ 350.0f }; // 350  // in the unit of gram
+  float releaseforce{ 550.0f }; // 350  // in the unit of gram
   //float normalforce{ 300.0f }; // 130  // in the unit of gram
   //float releaseforce{ 550.0f }; // 350  // in the unit of gram
 
@@ -199,6 +199,7 @@ struct App : public ws::App {
 
   // initiate stimuli if using colored squares
   ws::Vec2f stim0_size{0.1f, 0.1f}; // {0.2f,0.2f}
+  ws::Vec2f stim0_size_original{ 0.1f, 0.1f }; // {0.2f,0.2f}
   ws::Vec2f stim0_offset{ -0.4f, 0.1f }; //{ -0.4f, 0.25f };
   ws::Vec3f stim0_color{ 1.0f };
   ws::Vec3f stim0_color_noreward{ 0.5f, 0.5f, 0.5f };
@@ -208,6 +209,7 @@ struct App : public ws::App {
   ws::Vec3f stim0_color_coop_witheffort{ 1.0f, 1.0f, 0.0f };
 
   ws::Vec2f stim1_size{ 0.1f, 0.1f }; // {0.2f,0.2f}
+  ws::Vec2f stim1_size_original{ 0.1f, 0.1f }; // {0.2f,0.2f}
   ws::Vec2f stim1_offset{ 0.4f, 0.1f }; //{ -0.4f, 0.25f };
   ws::Vec3f stim1_color{ 1.0f };
   ws::Vec3f stim1_color_noreward{ 0.5f, 0.5f, 0.5f };
@@ -218,6 +220,8 @@ struct App : public ws::App {
 
   // initiate stimuli if using other images (non colored squares)
   std::optional<ws::gfx::TextureHandle> debug_image;
+  std::optional<ws::gfx::TextureHandle> debug_image_0;
+  std::optional<ws::gfx::TextureHandle> debug_image_3;
 
   // struct for saving data
   // std::ofstream save_trial_data_file;
@@ -366,22 +370,34 @@ void setup(App& app) {
   ws::led::initialize(&app.led_sync, ws::ni::read_time0(), Config::led_channel_index);
   
   // tasktype: 0 - no reward; 1 - self; 2 - self with effort; 3 - cooperative; 4 - cooperative with effort
-  if (app.tasktype == 0) {
-    auto buff_p = std::string{ WS_RES_DIR } + "/sounds/start_trial_beep.wav";
-    app.start_trial_audio_buffer = ws::audio::read_buffer(buff_p.c_str());
-    auto debug_image_p = std::string{ WS_RES_DIR } + "/images/calla_leaves.png";
-    app.debug_image = ws::gfx::read_2d_image(debug_image_p.c_str());
+  if (0) {
+    if (app.tasktype == 0) {
+      auto buff_p = std::string{ WS_RES_DIR } + "/sounds/start_trial_beep.wav";
+      app.start_trial_audio_buffer = ws::audio::read_buffer(buff_p.c_str());
+      auto debug_image_p = std::string{ WS_RES_DIR } + "/images/calla_leaves.png";
+      app.debug_image = ws::gfx::read_2d_image(debug_image_p.c_str());
+    }
+    else if (app.tasktype == 3) {
+      auto buff_p = std::string{ WS_RES_DIR } + "/sounds/start_trial_beep.wav";
+      app.start_trial_audio_buffer = ws::audio::read_buffer(buff_p.c_str());
+      auto debug_image_p = std::string{ WS_RES_DIR } + "/images/yellow_circle.png";
+      app.debug_image = ws::gfx::read_2d_image(debug_image_p.c_str());
+    }
+    else {
+      auto buff_p = std::string{ WS_RES_DIR } + "/sounds/start_trial_beep.wav";
+      app.start_trial_audio_buffer = ws::audio::read_buffer(buff_p.c_str());
+    }
   }
-  else if (app.tasktype == 3) {
-    auto buff_p = std::string{ WS_RES_DIR } + "/sounds/start_trial_beep.wav";
-    app.start_trial_audio_buffer = ws::audio::read_buffer(buff_p.c_str());
-    auto debug_image_p = std::string{ WS_RES_DIR } + "/images/yellow_circle.png";
-    app.debug_image = ws::gfx::read_2d_image(debug_image_p.c_str());
-  }
-  else {
-    auto buff_p = std::string{ WS_RES_DIR } + "/sounds/start_trial_beep.wav";
-    app.start_trial_audio_buffer = ws::audio::read_buffer(buff_p.c_str());
-  }
+
+  auto debug_image_0 = std::string{ WS_RES_DIR } + "/images/calla_leaves.png";
+  app.debug_image_0 = ws::gfx::read_2d_image(debug_image_0.c_str());
+
+  auto debug_image_3 = std::string{ WS_RES_DIR } + "/images/yellow_circle.png";
+  app.debug_image_3 = ws::gfx::read_2d_image(debug_image_3.c_str());
+
+  auto buff_p = std::string{ WS_RES_DIR } + "/sounds/start_trial_beep.wav";
+  app.start_trial_audio_buffer = ws::audio::read_buffer(buff_p.c_str());
+
   auto buff_p1 = std::string{ WS_RES_DIR } + "/sounds/successful_beep.wav";
   app.sucessful_pull_audio_buffer = ws::audio::read_buffer(buff_p1.c_str());
 
@@ -1059,8 +1075,6 @@ void task_update(App& app) {
       new_trial.total_time = app.new_total_time;
       new_trial.stim0_offset = app.stim0_offset;
       new_trial.stim1_offset = app.stim1_offset;
-      new_trial.stim0_size = app.stim0_size;
-      new_trial.stim1_size = app.stim1_size;
       // tasktype: 0 - no reward; 1 - self; 2 - self with effort; 3 - cooperative; 4 - cooperative with effort
       if (app.tasktype == 0) {
         //auto buff_p = std::string{ WS_RES_DIR } + "/sounds/start_trial_beep.wav";
@@ -1068,6 +1082,8 @@ void task_update(App& app) {
         // auto debug_image_p = std::string{ WS_RES_DIR } + "/images/calla_leaves.png";
         // app.debug_image = ws::gfx::read_2d_image(debug_image_p.c_str());
         //      
+        new_trial.stim0_size = app.stim0_size_original;
+        new_trial.stim1_size = app.stim1_size_original;
         new_trial.stim0_image = std::nullopt;
         new_trial.stim1_image = std::nullopt;
         new_trial.stim0_color = app.stim0_color_noreward;
@@ -1077,6 +1093,8 @@ void task_update(App& app) {
         //auto buff_p = std::string{ WS_RES_DIR } + "/sounds/start_trial_beep.wav";
         //app.start_trial_audio_buffer = ws::audio::read_buffer(buff_p.c_str());
         //
+        new_trial.stim0_size = app.stim0_size_original;
+        new_trial.stim1_size = app.stim1_size_original;
         new_trial.stim0_image = std::nullopt;
         new_trial.stim1_image = std::nullopt;
         new_trial.stim0_color = app.stim0_color;
@@ -1086,6 +1104,8 @@ void task_update(App& app) {
         //auto buff_p = std::string{ WS_RES_DIR } + "/sounds/start_trial_beep.wav";
         //app.start_trial_audio_buffer = ws::audio::read_buffer(buff_p.c_str());
         //
+        new_trial.stim0_size = app.stim0_size;
+        new_trial.stim1_size = app.stim1_size;
         new_trial.stim0_image = std::nullopt;
         new_trial.stim1_image = std::nullopt;
         new_trial.stim0_color = app.stim0_color_self_witheffort;
@@ -1094,16 +1114,22 @@ void task_update(App& app) {
       else if (app.tasktype == 3) {
         //auto buff_p = std::string{ WS_RES_DIR } + "/sounds/start_trial_beep.wav";
         //app.start_trial_audio_buffer = ws::audio::read_buffer(buff_p.c_str());
-        auto debug_image_p = std::string{ WS_RES_DIR } + "/images/yellow_circle.png";
-        app.debug_image = ws::gfx::read_2d_image(debug_image_p.c_str());
+        // auto debug_image_p = std::string{ WS_RES_DIR } + "/images/yellow_circle.png";
+        // app.debug_image = ws::gfx::read_2d_image(debug_image_p.c_str());
         //
-        new_trial.stim0_image = app.debug_image;
-        new_trial.stim1_image = app.debug_image;
+        // new_trial.stim0_image = app.debug_image;
+        // new_trial.stim1_image = app.debug_image;
+        new_trial.stim0_size = app.stim0_size_original;
+        new_trial.stim1_size = app.stim1_size_original;
+        new_trial.stim0_image = app.debug_image_3;
+        new_trial.stim1_image = app.debug_image_3;
       }
       else if (app.tasktype == 4) {
         //auto buff_p = std::string{ WS_RES_DIR } + "/sounds/start_trial_beep.wav";
         //app.start_trial_audio_buffer = ws::audio::read_buffer(buff_p.c_str());
         //
+        new_trial.stim0_size = app.stim0_size;
+        new_trial.stim1_size = app.stim1_size;
         new_trial.stim0_image = std::nullopt;
         new_trial.stim1_image = std::nullopt;
         new_trial.stim0_color = app.stim0_color_coop_witheffort;
