@@ -110,13 +110,14 @@ struct App : public ws::App {
   // Some of these variable can be changed accordingly for each session. - Weikang
 
   // file name
-  std::string lever1_animal{ "Vermelho" };
-  std::string lever2_animal{ "Koala" };
+  std::string lever1_animal{ "Kanga" };
+  std::string lever2_animal{ "Dannon" };
   
-  std::string experiment_date{ "20240425" };
+ 
+  std::string experiment_date{ "20241105" };
 
   // tasktype: 0 - no reward; 1 - self; 2 - self with effort; 3 - cooperative; 4 - cooperative with effort
-  int tasktype{ 4 }; // indicate the task type and different cue color: 
+  int tasktype{ 2 }; // indicate the task type and different cue color: 
 
   // int tasktype{rand()%2}; // indicate the task type and different cue color: 0 - no reward; 1 - self; 2 - self with effort; 3 - cooperative; 4 - cooperative with effort
   // int tasktype{ rand()%4}; // indicate the task type and different cue color: 0 - no reward; 1 - self; 2 - self with effort; 3 - cooperative; 4 - cooperative with effort 
@@ -131,8 +132,8 @@ struct App : public ws::App {
 
   // effort level modulation
   // only function when task types are 2 or 4 
-  float lever1_forceperc{ 0.90f }; // % percentage of max force level (800 grams)
-  float lever2_forceperc{ 0.10f }; // % percentage of max force level (800 grams)
+  float lever1_forceperc{ 0.15f }; // % percentage of max force level (800 grams)
+  float lever2_forceperc{ 0.15f }; // % percentage of max force level (800 grams)
   //
   float lever1_forces{ 0.0f };
   float lever2_forces{ 0.0f };
