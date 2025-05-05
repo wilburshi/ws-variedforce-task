@@ -146,8 +146,10 @@ struct NITask {
 struct {
   NITask ni_input_export_task{};
 
-  NITriggerDetect ni_trigger_detect{};
-  std::mutex ni_trigger_time_point_mutex{};
+  // NITriggerDetect ni_trigger_detect{};
+  // std::mutex ni_trigger_time_point_mutex{};
+  NITriggerDetect ni_trigger_detects[2];
+  std::mutex ni_trigger_time_point_mutexes[2];
 
   std::vector<double> daq_sample_buffer;
   int num_samples_per_input_channel{};
@@ -197,8 +199,15 @@ void ni_trigger_detect(
 [[nodiscard]] uint32_t ni_read_data(TaskHandle task, double* read_buff, uint32_t num_samples) {
   int32 num_read{};
   const int32 status = DAQmxReadAnalogF64(
-    task, num_samples, 100.0, DAQmx_Val_GroupByChannel,
-    read_buff, num_samples, &num_read, nullptr);
+    task,
+    num_samples,                            // samples per channel
+    100.0,
+    DAQmx_Val_GroupByChannel,
+    read_buff,
+    num_samples * globals.num_analog_input_channels, //  total buffer size
+    &num_read,
+    nullptr
+  );
   if (status != 0) {
     log_ni_error();
   }
@@ -251,13 +260,43 @@ int32 CVICALLBACK ni_input_sample_callback(TaskHandle task, int32, uInt32 num_sa
 
   //  Look for rising edges in analog voltage trace on the first channel.
   //  @TODO: We could specify a choice of channel index on which to look.
-  {
-    std::lock_guard<std::mutex> lock(globals.ni_trigger_time_point_mutex);
+  //{
+  // std::lock_guard<std::mutex> lock(globals.ni_trigger_time_point_mutex);
+  //
+  //  ni_trigger_detect(
+  //    &globals.ni_trigger_detect, sample0_index, sample0_time,
+  //    read_buff, num_read, globals.input_sample_rate);
+  // }
+
+  // newly added  -WS
+  for (int ch = 0; ch < 2; ch++) {
+    std::lock_guard<std::mutex> lock(globals.ni_trigger_time_point_mutexes[ch]);
+
+    // GroupByChannel format: each channel gets a block of samples
+    double* channel_data = read_buff + ch * num_read;
 
     ni_trigger_detect(
-      &globals.ni_trigger_detect, sample0_index, sample0_time,
-      read_buff, num_read, globals.input_sample_rate);
+      &globals.ni_trigger_detects[ch],
+      sample0_index,
+      sample0_time,
+      channel_data,
+      num_read,
+      globals.input_sample_rate);
+  }for (int ch = 0; ch < 2; ch++) {
+    std::lock_guard<std::mutex> lock(globals.ni_trigger_time_point_mutexes[ch]);
+
+    // GroupByChannel format: each channel gets a block of samples
+    double* channel_data = read_buff + ch * num_read;
+
+    ni_trigger_detect(
+      &globals.ni_trigger_detects[ch],
+      sample0_index,
+      sample0_time,
+      channel_data,
+      num_read,
+      globals.input_sample_rate);
   }
+  // newly added  -WS
 
   ni_maybe_send_sample_buffer(read_buff, num_read, sample0_index, sample0_time);
   globals.ni_num_input_samples_acquired += uint64_t(num_read);
@@ -441,8 +480,10 @@ bool ni::init_ni(const InitParams& params) {
 
   const auto t0 = ws::now();
   globals.time0 = t0;
-  globals.ni_trigger_detect.init(t0);
-
+  // globals.ni_trigger_detect.init(t0);
+  for (int i = 0; i < 2; ++i) {
+    globals.ni_trigger_detects[i].init(t0);
+  }
   globals.input_sample_rate = params.sample_rate;
   globals.num_analog_input_channels = params.num_analog_input_channels;
   globals.num_samples_per_input_channel = params.num_samples_per_channel;
@@ -512,7 +553,11 @@ void ni::update_ni() {
 void ni::terminate_ni() {
   stop_daq();
   globals.daq_sample_buffer.clear();
-  globals.ni_trigger_detect.reset();
+  //globals.ni_trigger_detect.reset();
+  for (auto& detector : globals.ni_trigger_detects) {
+    detector.reset();
+  }
+  //globals.ni_trigger_detects.clear();
   globals.num_samples_per_input_channel = 0;
   globals.num_analog_input_channels = 0;
   globals.num_analog_output_channels = 0;
@@ -560,14 +605,26 @@ std::vector<ni::TriggerTimePoint> ni::read_sync_time_points() {
   return globals.input_sample_sync_points.time_points;
 }
 
-std::vector<ni::TriggerTimePoint> ni::read_trigger_time_points() {
-  std::vector<ni::TriggerTimePoint> tps;
-  {
-    std::lock_guard<std::mutex> lock(globals.ni_trigger_time_point_mutex);
-    tps = globals.ni_trigger_detect.time_points.time_points;
+
+//std::vector<ni::TriggerTimePoint> ni::read_trigger_time_points() {
+//  std::vector<ni::TriggerTimePoint> tps;
+//  {
+//    std::lock_guard<std::mutex> lock(globals.ni_trigger_time_point_mutex);
+//    tps = globals.ni_trigger_detect.time_points.time_points;
+//  }
+//  return tps;/
+//}
+// 
+// newly added - WS
+std::vector<std::vector<ni::TriggerTimePoint>> ni::read_trigger_time_points() {
+  std::vector<std::vector<ni::TriggerTimePoint>> all_tps(2);
+  for (int i = 0; i < 2; i++) {
+    std::lock_guard<std::mutex> lock(globals.ni_trigger_time_point_mutexes[i]);
+    all_tps[i] = globals.ni_trigger_detects[i].time_points.time_points;
   }
-  return tps;
+  return all_tps;
 }
+// newly added -WS
 
 bool ni::write_analog_pulse(int channel, float val, float for_time) {
   if (!analog_write(channel, val)) {
@@ -578,4 +635,4 @@ bool ni::write_analog_pulse(int channel, float val, float for_time) {
   return true;
 }
 
-} //  
+} //  ws
